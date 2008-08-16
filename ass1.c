@@ -5,10 +5,23 @@
 #include <string.h> /* memset() */
 #include <netdb.h> /* struct sockaddr_in */
 #include <netinet/in.h> /* another not required? */
+#include <sys/stat.h> /* S_* declarations */
+#include <fcntl.h> /* O_RDONLY declaration */
 
 #define PORTNUM 50023
 #define BACKLOG 10
-#define MAXDATASIZE 100
+#define MAXDATASIZE 1000
+
+#define DOCUMENTROOT "./files"
+#define SEPERATOR "/"
+
+#define STATE_NONE 0
+#define STATE_GET 1
+#define STATE_IGNORE 2
+
+void logmsg(char* message) {
+	printf("Server: %s\n", message);
+}
 
 int main(int argc, char* argv[]) {
 	const int on = 1;
@@ -52,20 +65,111 @@ int main(int argc, char* argv[]) {
 			exit(1);
 		}
 		
+		char data[MAXDATASIZE];
+		char message[MAXDATASIZE];
+		snprintf(message, MAXDATASIZE-1,"New connection from %s on port %s", inet_ntoa(their_addr.sin_addr.s_addr), inet_ntoa(their_addr.sin_port));
+		logmsg(message);
+		
 		char buf[MAXDATASIZE];
 		int numbytes;
-		if ((numbytes=recv(fd_new, buf, 100-1, 0)) == -1) {
+		if ((numbytes=recv(fd_new, buf, MAXDATASIZE-1, 0)) == -1) {
 			perror("recv");
-			exit(1);
-		}
-		
-		if (send(fd_new, "Hello, world!\n", 14, 0) == -1) {
-			perror("send");
 			close(fd_new);
 			exit(1);
 		}
+		printf("Recieved %d\n", numbytes);
+		
+		char* filename = NULL;
+		
+		char *line = strtok(buf, "\n");
+		while(line != NULL) {
+			char *tok = strtok(buf, " ");
+			int state = STATE_NONE;
+			int stateIgnoreCount = 0;
+			while (tok != NULL) {
+				switch(state) {
+					/* Looks for a valid HTML request */
+					case STATE_NONE:
+						if(strncmp("GET", tok, 3) == 0) {
+							printf("GET REQUEST\n");
+							state = STATE_GET;
+						} else {
+							printf("Skipping unknown token '%s'\n", tok);
+						}
+						break;
+					/* processes a get request */
+					case STATE_GET:
+						printf("Filename: %s\n", tok);
+						state = STATE_NONE;
+						
+						if(strcmp(tok, "/") == 0) {
+							filename = "index.html";
+						} else if (tok[0] == '/') { /* nuke leading '/' */
+							printf("Nuke leading /\n");
+							filename = tok+1;
+						} else {
+							filename = tok;
+						}
+						
+						break;
+					/* Ignores trailng data */
+					case STATE_IGNORE:
+						stateIgnoreCount--;
+						if(stateIgnoreCount < 1) {
+							state = STATE_NONE;
+						}
+						printf("Skipping token '%s'...\n", tok);
+						break;
+				}
+				
+				tok = strtok(NULL," ");
+			}
+			line = strtok(NULL, "\n");
+		}
+		
+		if(filename != NULL) {
+			
+			
+			int fd;
+			int flags = O_RDONLY;
+			mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+			
+			char realfile[MAXDATASIZE];
+			snprintf(realfile, MAXDATASIZE, "%s%s%s", DOCUMENTROOT, SEPERATOR, filename);
+			printf("Opening file '%s'...\n", realfile);
+			fd = open(realfile, flags, mode);
+			
+			if(fd == -1) {
+				perror("file");
+				snprintf(data, MAXDATASIZE-1,"404!\n");
+				if (send(fd_new, data, strlen(data), 0) == -1) {
+					perror("send");
+					close(fd_new);
+					exit(1);
+				}
+			} else {
+				int nbytes = 100;
+				while( (nbytes = read(fd, data, MAXDATASIZE)) > 0) {
+					//printf("Dumping file to socket...\n");
+					write(fd_new, data, nbytes);
+				}
+				printf("Closing file...\n");
+				//fclose(filep);
+				printf("Closed file.\n");
+			}
+		}
+		
+		buf[0]='\0'; /* Ensure blank data doesn't case a repeat */
+		filename = NULL;
+		
+		/*if (send(fd_new, "Hello, world!\n", 14, 0) == -1) {
+			perror("send");
+			close(fd_new);
+			exit(1);
+		}*/
+		
 		close(fd_new);
-		printf("%s\n", buf);
 	}
+	
 	exit(0);
 }
