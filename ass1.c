@@ -22,7 +22,6 @@ int main(int argc, char* argv[]) {
 		perror("socket");
 		exit(1);
 	}
-	//memset(&my_addr,0,sizeof(my_addr));
 	
 	if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0) {
 		perror("setsockopt");
@@ -33,7 +32,7 @@ int main(int argc, char* argv[]) {
 	my_addr.sin_port = htons(PORTNUM);
 	my_addr.sin_addr.s_addr = INADDR_ANY;
 	
-    memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
+	memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
 	
 	if(bind(sockfd, (struct sockaddr *)&my_addr, sizeof(my_addr)) < 0) {
 		perror("bind");
@@ -48,27 +47,25 @@ int main(int argc, char* argv[]) {
 	while(connected) {
 		int clen = sizeof(their_addr);
 		fd_new = accept(sockfd, (struct sockaddr *)&their_addr, &clen);
-		if(fd_new < 0) { //is it a client?
+		if(fd_new < 0) {
 			perror("accept");
 			exit(1);
 		}
 		
-
-		
-    	char buf[MAXDATASIZE];
+		char buf[MAXDATASIZE];
 		int numbytes;
 		if ((numbytes=recv(fd_new, buf, 100-1, 0)) == -1) {
-        	perror("recv");
-        	exit(1);
+			perror("recv");
+			exit(1);
 		}
-	
+		
 		if (send(fd_new, "Hello, world!\n", 14, 0) == -1) {
-        	perror("send");
+			perror("send");
 			close(fd_new);
-        	exit(1);
+			exit(1);
 		}
-		close(fd_new);		
+		close(fd_new);
 		printf("%s\n", buf);
-    }
+	}
 	exit(0);
 }
