@@ -139,7 +139,15 @@ int main(int argc, char* argv[]) {
 			printf("Opening file '%s'...\n", realfile);
 			fd = open(realfile, flags, mode);
 			
+			/* Display a 404 page if it exists */
 			if(fd == -1) {
+				snprintf(realfile, MAXDATASIZE, "%s%s%s", DOCUMENTROOT, SEPERATOR, "404.html"); 
+				printf("Loading 404 page: '%s'\n", realfile);
+				fd = open(realfile, flags, mode);
+			}
+			
+			/* Display a real basic plain text 404 message if no html */			
+			if (fd == -1) {
 				perror("file");
 				snprintf(data, MAXDATASIZE-1,"404!\n");
 				if (send(fd_new, data, strlen(data), 0) == -1) {
@@ -147,16 +155,15 @@ int main(int argc, char* argv[]) {
 					close(fd_new);
 					exit(1);
 				}
-			} else {
-				int nbytes = 100;
-				while( (nbytes = read(fd, data, MAXDATASIZE)) > 0) {
-					//printf("Dumping file to socket...\n");
-					write(fd_new, data, nbytes);
-				}
-				printf("Closing file...\n");
-				//fclose(filep);
-				printf("Closed file.\n");
 			}
+			int nbytes = 100;
+			while( (nbytes = read(fd, data, MAXDATASIZE)) > 0) {
+				//printf("Dumping file to socket...\n");
+				write(fd_new, data, nbytes);
+			}
+			printf("Closing file...\n");
+			//fclose(filep);
+			printf("Closed file.\n");
 		}
 		
 		buf[0]='\0'; /* Ensure blank data doesn't case a repeat */
