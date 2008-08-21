@@ -8,6 +8,7 @@
 #include <sys/stat.h> /* S_* declarations */
 #include <fcntl.h> /* O_RDONLY declaration */
 #include <getopt.h> /* For command line handling */
+#include <pthread.h>
 
 #define PORTNUM 50023 /* Default port, override with -p # */
 #define BACKLOG 10
@@ -20,6 +21,10 @@
 #define STATE_GET 1
 #define STATE_IGNORE 2
 
+void* thread_proc(void *arg);
+
+char documentRoot[255]; /* Directory holding the files served */
+
 void logmsg(char* message) {
 	printf("Server: %s\n", message);
 }
@@ -28,16 +33,15 @@ int main(int argc, char* argv[]) {
 	const int on = 1;
 	int sockfd, fd_new;
 	struct sockaddr_in my_addr;
-	struct sockaddr_in their_addr;
 	int connected = 1;
 	int portnum = PORTNUM;
-	int name;
+	int name, result;
+	pthread_t thread_id;
 	char usage[255]; /* For holding the error message */
 	
 	char address[255]; /* For holding an overiding bind address */
 	address[0]='\0';
-	
-	char documentRoot[255]; /* Directory holding the files served */
+
 	strncpy(documentRoot, DOCUMENTROOT, 255);
 	
 	snprintf(usage, 255, "%s: [-p port] [-a address] [-d directory]", (char*)argv[0]);
@@ -78,8 +82,7 @@ int main(int argc, char* argv[]) {
 	} else {
 		inet_aton(address, my_addr.sin_addr.s_addr);
 	}
-	
-	
+		
 	memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
 	
 	printf("Starting server on port %d.\n", portnum);
@@ -95,17 +98,26 @@ int main(int argc, char* argv[]) {
 	}
 	
 	while(connected) {
-		int clen = sizeof(their_addr);
-		fd_new = accept(sockfd, (struct sockaddr *)&their_addr, &clen);
+		fd_new = accept(sockfd, NULL, NULL);
 		if(fd_new < 0) {
 			perror("accept");
 			exit(1);
 		}
-		
+		result = pthread_create(&thread_id, NULL, thread_proc, (void*)fd_new);
+		if (result != 0) {
+            perror("pthread");
+            exit(1);
+        }
+        pthread_detach(thread_id);
+	}
+	
+	exit(0);
+}
+
+void *thread_proc(void *arg) {
+        int fd_new = (int)arg;
 		char data[MAXDATASIZE];
 		char message[MAXDATASIZE];
-		snprintf(message, MAXDATASIZE-1,"New connection from %s on port %s", inet_ntoa(their_addr.sin_addr.s_addr), inet_ntoa(their_addr.sin_port));
-		logmsg(message);
 		
 		char buf[MAXDATASIZE];
 		int numbytes;
@@ -165,8 +177,6 @@ int main(int argc, char* argv[]) {
 		}
 		
 		if(filename != NULL) {
-			
-			
 			int fd;
 			int flags = O_RDONLY;
 			mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
@@ -205,7 +215,4 @@ int main(int argc, char* argv[]) {
 		filename = NULL;
 		
 		close(fd_new);
-	}
-	
-	exit(0);
 }
