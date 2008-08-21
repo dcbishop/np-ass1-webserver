@@ -7,15 +7,16 @@
 #include <netinet/in.h> /* another not required? */
 #include <sys/stat.h> /* S_* declarations */
 #include <fcntl.h> /* O_RDONLY declaration */
+#include <getopt.h> /* For command line handling */
 
-#define PORTNUM 50023
+#define PORTNUM 50023 /* Default port, override with -p # */
 #define BACKLOG 10
 #define MAXDATASIZE 1000
 
-#define DOCUMENTROOT "./files"
-#define SEPERATOR "/"
+#define DOCUMENTROOT "./files" /* Default location of the files to be servered, override with '-d directory' */
+#define SEPERATOR "/" /* Backslash for windows or other odd systems */
 
-#define STATE_NONE 0
+#define STATE_NONE 0 /* Defines used for simple state machine later */
 #define STATE_GET 1
 #define STATE_IGNORE 2
 
@@ -29,6 +30,34 @@ int main(int argc, char* argv[]) {
 	struct sockaddr_in my_addr;
 	struct sockaddr_in their_addr;
 	int connected = 1;
+	int portnum = PORTNUM;
+	int name;
+	char usage[255]; /* For holding the error message */
+	
+	char address[255]; /* For holding an overiding bind address */
+	address[0]='\0';
+	
+	char documentRoot[255]; /* Directory holding the files served */
+	strncpy(documentRoot, DOCUMENTROOT, 255);
+	
+	snprintf(usage, 255, "%s: [-p port] [-a address] [-d directory]", (char*)argv[0]);
+	
+	while ((name = getopt(argc, argv, "p:a:d:")) != -1) {
+		switch(name) {
+			case 'p':
+				portnum = atoi(optarg);
+				break;
+			case 'a':
+				strncpy(address, optarg, 255);
+				break;
+			case 'd':
+				strncpy(documentRoot, optarg, 255);
+			case '?':
+				fprintf(stderr, "%s\n", usage);
+				exit(1);
+		}
+	}
+	argc -= optind-1;
 	
 	sockfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if(sockfd == -1) {
@@ -42,10 +71,17 @@ int main(int argc, char* argv[]) {
 	}
 	
 	my_addr.sin_family = AF_INET;
-	my_addr.sin_port = htons(PORTNUM);
-	my_addr.sin_addr.s_addr = INADDR_ANY;
+	my_addr.sin_port = htons(portnum);
+	if(address[0] == '\0') {
+		my_addr.sin_addr.s_addr = INADDR_ANY;
+	} else {
+		inet_aton(address, my_addr.sin_addr.s_addr);
+	}
+	
 	
 	memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
+	
+	printf("Starting server on port %d.\n", portnum);
 	
 	if(bind(sockfd, (struct sockaddr *)&my_addr, sizeof(my_addr)) < 0) {
 		perror("bind");
@@ -77,7 +113,7 @@ int main(int argc, char* argv[]) {
 			close(fd_new);
 			exit(1);
 		}
-		printf("Recieved %d\n", numbytes);
+		printf("Recieved %d bytes of data.\n", numbytes);
 		
 		char* filename = NULL;
 		
@@ -135,18 +171,18 @@ int main(int argc, char* argv[]) {
 			mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 			
 			char realfile[MAXDATASIZE];
-			snprintf(realfile, MAXDATASIZE, "%s%s%s", DOCUMENTROOT, SEPERATOR, filename);
+			snprintf(realfile, MAXDATASIZE, "%s%s%s", documentRoot, SEPERATOR, filename);
 			printf("Opening file '%s'...\n", realfile);
 			fd = open(realfile, flags, mode);
 			
 			/* Display a 404 page if it exists */
 			if(fd == -1) {
-				snprintf(realfile, MAXDATASIZE, "%s%s%s", DOCUMENTROOT, SEPERATOR, "404.html"); 
+				snprintf(realfile, MAXDATASIZE, "%s%s%s", documentRoot, SEPERATOR, "404.html"); 
 				printf("Loading 404 page: '%s'\n", realfile);
 				fd = open(realfile, flags, mode);
 			}
 			
-			/* Display a real basic plain text 404 message if no html */			
+			/* Display a real basic plain text 404 message if no html */
 			if (fd == -1) {
 				perror("file");
 				snprintf(data, MAXDATASIZE-1,"404!\n");
@@ -158,22 +194,14 @@ int main(int argc, char* argv[]) {
 			}
 			int nbytes = 100;
 			while( (nbytes = read(fd, data, MAXDATASIZE)) > 0) {
-				//printf("Dumping file to socket...\n");
 				write(fd_new, data, nbytes);
 			}
 			printf("Closing file...\n");
-			//fclose(filep);
-			printf("Closed file.\n");
+			close(fd);
 		}
 		
 		buf[0]='\0'; /* Ensure blank data doesn't case a repeat */
 		filename = NULL;
-		
-		/*if (send(fd_new, "Hello, world!\n", 14, 0) == -1) {
-			perror("send");
-			close(fd_new);
-			exit(1);
-		}*/
 		
 		close(fd_new);
 	}
