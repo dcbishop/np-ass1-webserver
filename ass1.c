@@ -52,6 +52,7 @@ int main(int argc, char* argv[]) {
 				break;
 			case 'd':
 				strncpy(documentRoot, optarg, 255);
+				break;
 			case '?':
 				fprintf(stderr, "%s\n", usage);
 				exit(1);
