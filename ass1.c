@@ -105,17 +105,17 @@ int main(int argc, char* argv[]) {
 		}
 		result = pthread_create(&thread_id, NULL, thread_proc, (void*)fd_new);
 		if (result != 0) {
-            perror("pthread");
-            exit(1);
-        }
-        pthread_detach(thread_id);
+				perror("pthread");
+				exit(1);
+			}
+			pthread_detach(thread_id);
 	}
 	
 	exit(0);
 }
 
 void *thread_proc(void *arg) {
-        int fd_new = (int)arg;
+		int fd_new = (int)arg;
 		char data[MAXDATASIZE];
 		char message[MAXDATASIZE];
 		
