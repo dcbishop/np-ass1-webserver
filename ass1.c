@@ -8,6 +8,7 @@
 #include <sys/stat.h> /* S_* declarations */
 #include <fcntl.h> /* O_RDONLY declaration */
 #include <getopt.h> /* For command line handling */
+#include <errno.h>
 
 #define PORTNUM 50023 /* Default port, override with -p # */
 #define BACKLOG 10
@@ -34,7 +35,7 @@ int main(int argc, char* argv[]) {
 	int connected = 1;
 	int portnum = PORTNUM;
 	int name;
-    fd_set readset, testset;
+   fd_set readset;
 	int max_fd;
 	int result;
 	int i;
@@ -50,7 +51,6 @@ int main(int argc, char* argv[]) {
 	snprintf(usage, 255, "%s: [-p port] [-a address] [-d directory]", (char*)argv[0]);
 	
 	FD_ZERO(&readset);
-	FD_ZERO(&testset);
 	
 	while ((name = getopt(argc, argv, "p:a:d:")) != -1) {
 		switch(name) {
@@ -106,22 +106,17 @@ int main(int argc, char* argv[]) {
 	
 	FD_SET(sockfd, &readset);
 	max_fd = max(max_fd, sockfd);
-	
+
 	while(connected) {
-		readset = testset;
-		result = select(max_fd+1, &testset, NULL, NULL, NULL);
-		if(result = -1) {
+		result = select(max_fd+1, &readset, NULL, NULL, NULL);
+		if ((result<0) && (errno!=EINTR)) {
 			perror("select");
 			exit(1);
 		}
-		printf("postselect\n");
 
-		for(i=0; i <= max_fd; i++) {		
-			printf("FLAG0 %d\n", i);
+		for(i=0; i <= max_fd; i++) {
 			if(FD_ISSET(i, &readset)) {
-				printf("FLAGA\n");
-				if(i == sockfd) {			
-					printf("FLAGB\n");
+				if(i == sockfd) {
 					int clen = sizeof(their_addr);
 					fd_new = accept(sockfd, (struct sockaddr *)&their_addr, &clen);
 					if(fd_new < 0) {
@@ -131,7 +126,11 @@ int main(int argc, char* argv[]) {
 		
 					char data[MAXDATASIZE];
 					char message[MAXDATASIZE];
-					snprintf(message, MAXDATASIZE-1,"New connection from %s on port %s", inet_ntoa(their_addr.sin_addr.s_addr), inet_ntoa(their_addr.sin_port));
+					
+					char address_str[INET_ADDRSTRLEN];
+					inet_ntop(AF_INET, &(their_addr.sin_addr), address_str, INET_ADDRSTRLEN);
+					
+					snprintf(message, MAXDATASIZE-1,"New connection from %s.", address_str);
 					logmsg(message);
 		
 					char buf[MAXDATASIZE];
