@@ -108,7 +108,6 @@ int main(int argc, char* argv[]) {
 	max_fd = max(max_fd, sockfd);
 	
 	while(connected) {
-		printf("While connected... %d, %d\n", max_fd, sockfd);
 		readset = testset;
 		result = select(max_fd+1, &testset, NULL, NULL, NULL);
 		if(result = -1) {
