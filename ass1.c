@@ -104,7 +104,11 @@ int main(int argc, char* argv[]) {
 		
 		char data[MAXDATASIZE];
 		char message[MAXDATASIZE];
-		snprintf(message, MAXDATASIZE-1,"New connection from %s on port %s", inet_ntoa(their_addr.sin_addr.s_addr), inet_ntoa(their_addr.sin_port));
+		
+		char address_str[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &(their_addr.sin_addr), address_str, INET_ADDRSTRLEN);
+		
+		snprintf(message, MAXDATASIZE-1,"New connection from %s.", address_str);
 		logmsg(message);
 		
 		char buf[MAXDATASIZE];
